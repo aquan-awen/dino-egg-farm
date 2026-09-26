@@ -3,17 +3,17 @@ local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
--- 1. Biến kiểm soát
+-- 1. Biến kiểm soát trạng thái
 _G.AutoTeleport = false
 
--- 2. Kiểm tra folder EggHuntSpawns
+-- 2. Tìm folder EggHuntSpawns
 local spawnFolder = workspace:FindFirstChild("EggHuntSpawns")
 if not spawnFolder then
     warn("Không tìm thấy EggHuntSpawns trong Workspace!")
     return
 end
 
--- 3. Tạo Giao diện UI
+-- 3. TẠO GIAO DIỆN NÚT BẬT/TẮT TRÊN MÀN HÌNH
 local playerGui = player:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild("EggTeleportGui")
 if oldGui then oldGui:Destroy() end
@@ -46,13 +46,12 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- 4. HÀM KIỂM TRA TRỨNG (QUAN TRỌNG: Duyệt sâu toàn bộ vật thể con)
-local function findEggInSpawn(spawnPart)
-    for _, desc in pairs(spawnPart:GetDescendants()) do
-        -- Lọc bỏ các UI/Highlight do script tạo ra
-        if desc.Name ~= "ESPHighlight" and desc.Name ~= "ESPNameTag" and not desc:IsA("UIComponent") and not desc:IsA("BillboardGui") and not desc:IsA("Highlight") then
-            if desc:IsA("BasePart") or desc:IsA("Model") or desc:IsA("MeshPart") then
-                return desc
+-- 4. HÀM TÌM TRỨNG (Chỉ loại trừ các đối tượng ESP/UI do script tạo ra)
+local function getEggObject(spawnPart)
+    for _, child in pairs(spawnPart:GetDescendants()) do
+        if child.Name ~= "ESPHighlight" and child.Name ~= "ESPNameTag" and not child:IsA("BillboardGui") and not child:IsA("Highlight") and not child:IsA("UIComponent") then
+            if child:IsA("Model") or child:IsA("BasePart") or child:IsA("MeshPart") then
+                return child
             end
         end
     end
@@ -61,8 +60,9 @@ end
 
 -- 5. HÀM CẬP NHẬT ESP
 local function updateESP(spawnPart)
-    local egg = findEggInSpawn(spawnPart)
-    
+    local egg = getEggObject(spawnPart)
+    local eggName = egg and egg.Name or "Không có trứng"
+
     local hl = spawnPart:FindFirstChild("ESPHighlight")
     if egg and not hl then
         hl = Instance.new("Highlight")
@@ -98,64 +98,56 @@ local function updateESP(spawnPart)
     local label = bgui:FindFirstChild("Label")
     if label and hrp then
         local dist = math.floor((hrp.Position - spawnPart.Position).Magnitude)
-        if egg then
-            label.Text = egg.Name .. " [" .. dist .. "m]"
-        else
-            label.Text = "Không có trứng [" .. dist .. "m]"
-        end
+        label.Text = eggName .. " [" .. dist .. "m]"
     end
 end
 
--- 6. VÒNG LẶP TELEPORT & TỰ ĐỘNG CHẠM/MUA TRỨNG
+-- 6. VÒNG LẶP TELEPORT TỨC THÌ & MUA TRỨNG
 task.spawn(function()
     while true do
-        -- Cập nhật ESP
         for _, spawnPart in pairs(spawnFolder:GetChildren()) do
             if spawnPart:IsA("BasePart") or spawnPart:IsA("Model") then
                 updateESP(spawnPart)
             end
         end
 
-        -- Xử lý Teleport
         if _G.AutoTeleport then
             for _, spawnPart in pairs(spawnFolder:GetChildren()) do
                 if not _G.AutoTeleport then break end
 
-                local egg = findEggInSpawn(spawnPart)
+                local egg = getEggObject(spawnPart)
                 if egg then
                     character = player.Character or player.CharacterAdded:Wait()
                     hrp = character:FindFirstChild("HumanoidRootPart")
 
                     if hrp then
-                        -- Lấy vị trí CFrame chuẩn xác của điểm Spawn hoặc quả Trứng
-                        local targetCFrame = spawnPart:IsA("BasePart") and spawnPart.CFrame or (egg:IsA("BasePart") and egg.CFrame or nil)
-                        
-                        if targetCFrame then
-                            -- Teleport thẳng nhân vật tới vị trí
-                            hrp.CFrame = targetCFrame * CFrame.new(0, 2, 0)
+                        -- Teleport đến vị trí điểm Spawn / Trứng
+                        local targetPos = spawnPart:IsA("BasePart") and spawnPart.CFrame or (egg:IsA("BasePart") and egg.CFrame or nil)
+                        if targetPos then
+                            hrp.CFrame = targetPos * CFrame.new(0, 2, 0)
 
-                            -- Kích hoạt ProximityPrompt (nếu có)
+                            -- Kích hoạt ProximityPrompt nếu game dùng phím tương tác
                             local prompt = spawnPart:FindFirstChildWhichIsA("ProximityPrompt", true) or egg:FindFirstChildWhichIsA("ProximityPrompt", true)
                             if prompt then
                                 fireproximityprompt(prompt)
                             end
 
-                            -- Giả lập chạm (Touch) để nhặt/mua
+                            -- Giả lập Touch nếu game dùng cơ chế dẫm/chạm vào trứng
                             if firetouchinterest then
-                                local touchPart = spawnPart:IsA("BasePart") and spawnPart or (egg:IsA("BasePart") and egg or nil)
-                                if touchPart then
-                                    firetouchinterest(hrp, touchPart, 0)
+                                local touchTarget = spawnPart:IsA("BasePart") and spawnPart or (egg:IsA("BasePart") and egg or nil)
+                                if touchTarget then
+                                    firetouchinterest(hrp, touchTarget, 0)
                                     task.wait(0.05)
-                                    firetouchinterest(hrp, touchPart, 1)
+                                    firetouchinterest(hrp, touchTarget, 1)
                                 end
                             end
 
-                            task.wait(0.3) -- Tạm dừng ngắn để game xử lý nhận vật phẩm
+                            task.wait(0.2)
                         end
                     end
                 end
             end
         end
-        task.wait(0.15)
+        task.wait(0.2)
     end
 end)
