@@ -1,15 +1,16 @@
-
-
+-- 1. Xử lý hiển thị Highlight
 local item = workspace:FindFirstChild("TargetItem")
 
 if item then
     local highlight = Instance.new("Highlight")
     highlight.Name = "ItemTracker"
-    highlight.FillColor = Color3.fromRGB(0, 255, 128) -- Màu phủ
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- Màu viền
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Hiển thị xuyên vật thể
+    highlight.FillColor = Color3.fromRGB(0, 255, 128)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.Parent = item
+end -- Thêm 'end' bị thiếu ở đây
 
+-- 2. Xử lý di chuyển bằng TweenService
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
@@ -19,19 +20,18 @@ local hrp = character:WaitForChild("HumanoidRootPart")
 
 local function moveToPosition(targetCFrame, duration)
     local tweenInfo = TweenInfo.new(
-        duration or 2,                     -- Thời gian di chuyển (giây)
-        Enum.EasingStyle.Linear,           -- Kiểu gia tốc
+        duration or 2,
+        Enum.EasingStyle.Linear,
         Enum.EasingDirection.Out
     )
     
     local goal = { CFrame = targetCFrame }
     local tween = TweenService:Create(hrp, tweenInfo, goal)
     tween:Play()
+end -- Thêm 'end' bị thiếu ở đây
 
-
--- Ví dụ: Di chuyển nhân vật đến vị trí một Part tên "Chest"
+-- 3. Gọi hàm di chuyển thử nghiệm
 local chest = workspace:FindFirstChild("Chest")
 if chest then
-    -- Dịch chuyển đến vị trí rương (dịch lên cao 3 stud để không bị dính vào vật thể)
     moveToPosition(chest.CFrame * CFrame.new(0, 3, 0), 1.5)
 end
