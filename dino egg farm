@@ -1,56 +1,85 @@
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
-print("=== BẮT ĐẦU ÉP HIỆN ESP MỌI VẬT THỂ ===")
+-- 1. Tìm đúng thư mục EggHuntSpawns trong Workspace
+local spawnFolder = workspace:FindFirstChild("EggHuntSpawns")
 
--- Hàm gắn Highlight và Nhãn Tên cho một đối tượng
-local function forceESP(obj)
-    -- Kiểm tra nếu đã có Highlight thì bỏ qua
-    if obj:FindFirstChild("ForceHighlight") then return end
+if not spawnFolder then
+    warn("Không tìm thấy thư mục EggHuntSpawns trong Workspace!")
+    return
+end
 
-    -- Tạo Highlight phát sáng xuyên tường
-    local hl = Instance.new("Highlight")
-    hl.Name = "ForceHighlight"
-    hl.FillColor = Color3.fromRGB(0, 255, 128) -- Màu xanh lá
-    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Parent = obj
+print("Đã tìm thấy EggHuntSpawns! Đang tạo ESP và di chuyển...")
 
-    -- Tìm Part để gắn Nhãn tên
-    local targetPart = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
-    if targetPart and not targetPart:FindFirstChild("ForceTag") then
+-- 2. Hàm tạo ESP cho Part
+local function applyESP(part, index)
+    if not part:IsA("BasePart") then return end
+
+    -- Tạo viền Highlight
+    if not part:FindFirstChild("ESPHighlight") then
+        local hl = Instance.new("Highlight")
+        hl.Name = "ESPHighlight"
+        hl.FillColor = Color3.fromRGB(0, 255, 128) -- Màu xanh lá
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = part
+    end
+
+    -- Tạo Nhãn Tên + Khoảng cách
+    if not part:FindFirstChild("ESPNameTag") then
         local bgui = Instance.new("BillboardGui")
-        bgui.Name = "ForceTag"
+        bgui.Name = "ESPNameTag"
         bgui.AlwaysOnTop = true
-        bgui.Size = UDim2.new(0, 200, 0, 40)
+        bgui.Size = UDim2.new(0, 150, 0, 30)
         bgui.StudsOffset = Vector3.new(0, 3, 0)
 
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = Color3.fromRGB(255, 255, 0)
-        label.TextStrokeTransparency = 0
-        label.TextSize = 13
-        label.Font = Enum.Font.SourceSansBold
-        label.Text = obj.Name -- Hiện chính xác tên của Object trong game
-        label.Parent = bgui
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextSize = 14
+        textLabel.Font = Enum.Font.SourceSansBold
+        textLabel.Parent = bgui
 
-        bgui.Parent = targetPart
+        bgui.Parent = part
+
+        task.spawn(function()
+            while part and part.Parent and bgui.Parent do
+                if hrp then
+                    local dist = math.floor((hrp.Position - part.Position).Magnitude)
+                    textLabel.Text = "Egg Spawn #" .. index .. " [" .. dist .. "m]"
+                end
+                task.wait(0.2)
+            end
+        end)
     end
 end
 
--- Đếm số lượng vật thể tìm thấy
-local count = 0
-
--- Duyệt qua toàn bộ workspace
-for _, child in pairs(workspace:GetChildren()) do
-    -- Bỏ qua nhân vật người chơi, Terrain và Camera
-    if child ~= character and child.Name ~= "Terrain" and child.Name ~= "Camera" then
-        forceESP(child)
-        count = count + 1
+-- 3. Vòng lặp gắn ESP và Dịch chuyển đến từng điểm Spawn
+task.spawn(function()
+    local spawnList = spawnFolder:GetChildren()
+    
+    -- Gắn ESP cho tất cả các điểm Spawn trước
+    for index, spawnPart in pairs(spawnList) do
+        applyESP(spawnPart, index)
     end
-end
 
-print("Đã gắn ESP thành công cho " .. count .. " vật thể trong Workspace!")
+    -- Di chuyển lần lượt qua từng điểm
+    for index, spawnPart in pairs(spawnList) do
+        if spawnPart:IsA("BasePart") then
+            -- Dịch chuyển nhân vật đến vị trí điểm Spawn (cao hơn 3 stud để không dính đất)
+            local targetCFrame = spawnPart.CFrame * CFrame.new(0, 3, 0)
+            local tween = TweenService:Create(hrp, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+            
+            tween:Play()
+            tween.Completed:Wait() -- Chờ bay tới nơi
+            
+            task.wait(0.5) -- Tạm dừng 0.5s tại mỗi điểm để nhặt/spawn trứng
+        end
+    end
+end)
