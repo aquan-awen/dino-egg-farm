@@ -1,87 +1,56 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
--- 1. Hàm tạo ESP (Viền + Nhãn Tên & Khoảng cách)
-local function applyESP(vậtThể)
-    local targetPart = vậtThể:IsA("BasePart") and vậtThể or vậtThể:FindFirstChildWhichIsA("BasePart")
-    if not targetPart then return end
+print("=== BẮT ĐẦU ÉP HIỆN ESP MỌI VẬT THỂ ===")
 
-    -- Tạo Highlight
-    if not vậtThể:FindFirstChild("ESPHighlight") then
-        local hl = Instance.new("Highlight")
-        hl.Name = "ESPHighlight"
-        hl.FillColor = Color3.fromRGB(255, 215, 0)
-        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.Parent = vậtThể
-    end
+-- Hàm gắn Highlight và Nhãn Tên cho một đối tượng
+local function forceESP(obj)
+    -- Kiểm tra nếu đã có Highlight thì bỏ qua
+    if obj:FindFirstChild("ForceHighlight") then return end
 
-    -- Tạo BillboardGui (Tên + Khoảng cách)
-    if not targetPart:FindFirstChild("ESPNameTag") then
+    -- Tạo Highlight phát sáng xuyên tường
+    local hl = Instance.new("Highlight")
+    hl.Name = "ForceHighlight"
+    hl.FillColor = Color3.fromRGB(0, 255, 128) -- Màu xanh lá
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = obj
+
+    -- Tìm Part để gắn Nhãn tên
+    local targetPart = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
+    if targetPart and not targetPart:FindFirstChild("ForceTag") then
         local bgui = Instance.new("BillboardGui")
-        bgui.Name = "ESPNameTag"
+        bgui.Name = "ForceTag"
         bgui.AlwaysOnTop = true
-        bgui.Size = UDim2.new(0, 150, 0, 30)
+        bgui.Size = UDim2.new(0, 200, 0, 40)
         bgui.StudsOffset = Vector3.new(0, 3, 0)
 
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextSize = 14
-        textLabel.Font = Enum.Font.SourceSansBold
-        textLabel.Parent = bgui
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(255, 255, 0)
+        label.TextStrokeTransparency = 0
+        label.TextSize = 13
+        label.Font = Enum.Font.SourceSansBold
+        label.Text = obj.Name -- Hiện chính xác tên của Object trong game
+        label.Parent = bgui
 
         bgui.Parent = targetPart
-
-        task.spawn(function()
-            while vậtThể and vậtThể.Parent and bgui.Parent do
-                if hrp and targetPart then
-                    local dist = math.floor((hrp.Position - targetPart.Position).Magnitude)
-                    textLabel.Text = vậtThể.Name .. " [" .. dist .. "m]"
-                end
-                task.wait(0.2)
-            end
-        end)
     end
 end
 
--- 2. Hàm di chuyển nhân vật
-local function teleportTo(cframe)
-    if not hrp then return end
-    local tween = TweenService:Create(hrp, TweenInfo.new(1.2, Enum.EasingStyle.Linear), {CFrame = cframe})
-    tween:Play()
-    tween.Completed:Wait()
+-- Đếm số lượng vật thể tìm thấy
+local count = 0
+
+-- Duyệt qua toàn bộ workspace
+for _, child in pairs(workspace:GetChildren()) do
+    -- Bỏ qua nhân vật người chơi, Terrain và Camera
+    if child ~= character and child.Name ~= "Terrain" and child.Name ~= "Camera" then
+        forceESP(child)
+        count = count + 1
+    end
 end
 
--- 3. Vòng lặp quét vật thể liên tục
-print("Script ESP & Teleport đang chạy...")
-
-task.spawn(function()
-    while true do
-        for _, obj in pairs(workspace:GetDescendants()) do
-            local isItem = false
-            local lowerName = string.lower(obj.Name)
-
-            -- Quét các từ khóa xuất hiện trong game này: egg, spawn, box, crate, claim
-            if string.find(lowerName, "egg") or string.find(lowerName, "spawn") or string.find(lowerName, "box") or string.find(lowerName, "crate") or string.find(lowerName, "claim") then
-                isItem = true
-            elseif obj:IsA("SpecialMesh") or obj:IsA("MeshPart") then
-                if obj.Parent and obj.Parent ~= character and not obj.Parent:IsA("Accessory") then
-                    isItem = true
-                    obj = obj.Parent
-                end
-            end
-
-            if isItem and obj ~= character and not obj:IsDescendantOf(character) then
-                applyESP(obj)
-            end
-        end
-        task.wait(2) -- Tự động cập nhật quét các vật thể mới xuất hiện mỗi 2 giây
-    end
-end)
+print("Đã gắn ESP thành công cho " .. count .. " vật thể trong Workspace!")
