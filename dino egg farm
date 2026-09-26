@@ -1,11 +1,13 @@
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
--- 1. Tìm đúng thư mục EggHuntSpawns trong Workspace
+-- 1. Biến Bật/Tắt hệ thống (Đổi thành false nếu muốn dừng lại)
+_G.AutoTeleport = true
+
+-- 2. Tìm thư mục EggHuntSpawns
 local spawnFolder = workspace:FindFirstChild("EggHuntSpawns")
 
 if not spawnFolder then
@@ -13,23 +15,19 @@ if not spawnFolder then
     return
 end
 
-print("Đã tìm thấy EggHuntSpawns! Đang tạo ESP và di chuyển...")
-
--- 2. Hàm tạo ESP cho Part
+-- 3. Hàm tạo ESP
 local function applyESP(part, index)
     if not part:IsA("BasePart") then return end
 
-    -- Tạo viền Highlight
     if not part:FindFirstChild("ESPHighlight") then
         local hl = Instance.new("Highlight")
         hl.Name = "ESPHighlight"
-        hl.FillColor = Color3.fromRGB(0, 255, 128) -- Màu xanh lá
+        hl.FillColor = Color3.fromRGB(0, 255, 128)
         hl.OutlineColor = Color3.fromRGB(255, 255, 255)
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Parent = part
     end
 
-    -- Tạo Nhãn Tên + Khoảng cách
     if not part:FindFirstChild("ESPNameTag") then
         local bgui = Instance.new("BillboardGui")
         bgui.Name = "ESPNameTag"
@@ -45,7 +43,6 @@ local function applyESP(part, index)
         textLabel.TextSize = 14
         textLabel.Font = Enum.Font.SourceSansBold
         textLabel.Parent = bgui
-
         bgui.Parent = part
 
         task.spawn(function()
@@ -60,26 +57,34 @@ local function applyESP(part, index)
     end
 end
 
--- 3. Vòng lặp gắn ESP và Dịch chuyển đến từng điểm Spawn
+-- 4. Vòng lặp Teleport TỨC THÌ (Chỉ đến nơi CÓ TRỨNG)
 task.spawn(function()
     local spawnList = spawnFolder:GetChildren()
     
-    -- Gắn ESP cho tất cả các điểm Spawn trước
+    -- Gắn ESP cho tất cả điểm spawn
     for index, spawnPart in pairs(spawnList) do
         applyESP(spawnPart, index)
     end
 
-    -- Di chuyển lần lượt qua từng điểm
-    for index, spawnPart in pairs(spawnList) do
-        if spawnPart:IsA("BasePart") then
-            -- Dịch chuyển nhân vật đến vị trí điểm Spawn (cao hơn 3 stud để không dính đất)
-            local targetCFrame = spawnPart.CFrame * CFrame.new(0, 3, 0)
-            local tween = TweenService:Create(hrp, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
-            
-            tween:Play()
-            tween.Completed:Wait() -- Chờ bay tới nơi
-            
-            task.wait(0.5) -- Tạm dừng 0.5s tại mỗi điểm để nhặt/spawn trứng
+    -- Vòng lặp tự động kiểm tra liên tục
+    while _G.AutoTeleport do
+        for index, spawnPart in pairs(spawnList) do
+            -- Kiểm tra nếu Bật/Tắt bị hủy giữa chừng
+            if not _G.AutoTeleport then break end
+
+            if spawnPart:IsA("BasePart") then
+                -- KIỂM TRA ĐIỀU KIỆN: Điểm Spawn có chứa Trứng (có child bên trong hoặc chứa Mesh)
+                local hasEgg = #spawnPart:GetChildren() > 2 -- Bỏ qua ESPHighlight & ESPNameTag đã gắn
+                
+                if hasEgg then
+                    -- TELEPORT TỨC THÌ: Gán CFrame trực tiếp (không dùng Tween/bay)
+                    hrp.CFrame = spawnPart.CFrame * CFrame.new(0, 3, 0)
+                    
+                    task.wait(0.3) -- Nghỉ ngắn 0.3s tại điểm có trứng
+                end
+            end
         end
+        task.wait(0.5) -- Đợi 0.5s trước khi bắt đầu lượt quét mới
     end
+    print("Hệ thống Teleport: ĐÃ DỪNG LẠI.")
 end)
