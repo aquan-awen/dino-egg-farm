@@ -1,85 +1,147 @@
 local Players = game:GetService("Players")
-
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
--- 1. Biến trạng thái Bật/Tắt
+-- 1. Biến kiểm soát trạng thái
 _G.AutoTeleport = false
 
--- 2. Tìm thư mục EggHuntSpawns trong Workspace
+-- 2. Tìm folder EggHuntSpawns
 local spawnFolder = workspace:FindFirstChild("EggHuntSpawns")
 if not spawnFolder then
     warn("Không tìm thấy EggHuntSpawns trong Workspace!")
     return
 end
 
--- 3. TẠO GIAO DIỆN NÚT BẬT/TẮT TRÊN MÀN HÌNH
-local CoreGui = game:GetService("CoreGui")
-local oldGui = CoreGui:FindFirstChild("EggTeleportGui")
+-- 3. TẠO GIAO DIỆN NÚT BẬT/TẮT TRÊN MÀN HÌNH (Gán vào PlayerGui)
+local playerGui = player:WaitForChild("PlayerGui")
+local oldGui = playerGui:FindFirstChild("EggTeleportGui")
 if oldGui then oldGui:Destroy() end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "EggTeleportGui"
-screenGui.Parent = CoreGui
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
 
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 140, 0, 45)
-toggleButton.Position = UDim2.new(0, 20, 0.4, 0) -- Vị trí góc trái màn hình
-toggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50) -- Mặc định màu đỏ (OFF)
+toggleButton.Size = UDim2.new(0, 150, 0, 50)
+toggleButton.Position = UDim2.new(0, 20, 0.4, 0) -- Nút nằm ở góc trái màn hình
+toggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50) -- Màu đỏ = OFF
 toggleButton.Text = "AUTO TP: OFF"
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.TextSize = 15
+toggleButton.TextSize = 16
 toggleButton.Font = Enum.Font.SourceSansBold
 toggleButton.Active = true
-toggleButton.Draggable = true -- Có thể kéo di chuyển nút trên màn hình
+toggleButton.Draggable = true -- Bấm giữ để kéo nút đi vị trí khác
 toggleButton.Parent = screenGui
 
--- Xử lý sự kiện khi bấm nút
+-- Sự kiện bấm nút On/Off
 toggleButton.MouseButton1Click:Connect(function()
     _G.AutoTeleport = not _G.AutoTeleport
     if _G.AutoTeleport then
         toggleButton.Text = "AUTO TP: ON"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(40, 200, 80) -- Đổi sang màu xanh (ON)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(40, 200, 80) -- Màu xanh = ON
     else
         toggleButton.Text = "AUTO TP: OFF"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50) -- Đổi sang màu đỏ (OFF)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
     end
 end)
 
--- 4. HÀM KIỂM TRA ĐIỂM SPAWN CÓ TRỨNG THẬT HAY KHÔNG
-local function checkHasEgg(spawnPart)
-    -- Duyệt các vật thể bên trong điểm Spawn
+-- 4. HÀM TÌM TÊN THỰC CỦA TRỨNG TRONG ĐIỂM SPAWN
+local function getEggObject(spawnPart)
     for _, child in pairs(spawnPart:GetChildren()) do
-        -- Trứng trong game này thường là MeshPart, SpecialMesh, hoặc Model
-        if child:IsA("Model") or child:IsA("MeshPart") or child:IsA("SpecialMesh") then
-            return true -- Xác nhận CÓ TRỨNG
+        -- Bỏ qua các thành phần ESP
+        if child.Name ~= "ESPHighlight" and child.Name ~= "ESPNameTag" then
+            if child:IsA("Model") or child:IsA("BasePart") or child:IsA("MeshPart") then
+                return child -- Tìm thấy vật thể Trứng thật
+            end
         end
     end
-    return false -- Không có trứng (điểm trống)
+    return nil -- Không có trứng (điểm trống)
 end
 
--- 5. VÒNG LẶP XỬ LÝ TELEPORT TỨC THÌ
+-- 5. HÀM TẠO/CẬP NHẬT ESP VỚI TÊN TRỨNG CHÍNH XÁC
+local function updateESP(spawnPart)
+    local egg = getEggObject(spawnPart)
+    local eggName = egg and egg.Name or "Không có trứng"
+
+    -- Chỉ hiện Highlight nếu CÓ TRỨNG
+    local hl = spawnPart:FindFirstChild("ESPHighlight")
+    if egg and not hl then
+        hl = Instance.new("Highlight")
+        hl.Name = "ESPHighlight"
+        hl.FillColor = Color3.fromRGB(0, 255, 128)
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = spawnPart
+    elseif not egg and hl then
+        hl:Destroy() -- Xóa Highlight nếu trứng đã mất/được mua
+    end
+
+    -- Cập nhật nhãn tên
+    local bgui = spawnPart:FindFirstChild("ESPNameTag")
+    if not bgui then
+        bgui = Instance.new("BillboardGui")
+        bgui.Name = "ESPNameTag"
+        bgui.AlwaysOnTop = true
+        bgui.Size = UDim2.new(0, 150, 0, 30)
+        bgui.StudsOffset = Vector3.new(0, 3, 0)
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Name = "Label"
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextSize = 13
+        textLabel.Font = Enum.Font.SourceSansBold
+        textLabel.Parent = bgui
+        bgui.Parent = spawnPart
+    end
+
+    local label = bgui:FindFirstChild("Label")
+    if label and hrp then
+        local dist = math.floor((hrp.Position - spawnPart.Position).Magnitude)
+        label.Text = eggName .. " [" .. dist .. "m]"
+    end
+end
+
+-- 6. VÒNG LẶP TELEPORT TỨC THÌ (CHỈ DỊCH CHUYỂN TỚI CHỖ CÓ TRỨNG)
 task.spawn(function()
     while true do
+        -- Cập nhật ESP cho toàn bộ điểm Spawn liên tục
+        for _, spawnPart in pairs(spawnFolder:GetChildren()) do
+            if spawnPart:IsA("BasePart") then
+                updateESP(spawnPart)
+            end
+        end
+
+        -- Nếu nút đang ON thì mới tiến hành dịch chuyển
         if _G.AutoTeleport then
             for _, spawnPart in pairs(spawnFolder:GetChildren()) do
-                -- Nếu trong lúc đang chạy mà bấm nút OFF thì dừng ngay
                 if not _G.AutoTeleport then break end
 
-                if spawnPart:IsA("BasePart") and checkHasEgg(spawnPart) then
-                    -- Cập nhật lại hrp nếu nhân vật bị respawn
+                local egg = getEggObject(spawnPart)
+                -- CHỈ TELEPORT KHI ĐIỂM NÀY CÓ TRỨNG THẬT
+                if spawnPart:IsA("BasePart") and egg then
                     character = player.Character or player.CharacterAdded:Wait()
                     hrp = character:FindFirstChild("HumanoidRootPart")
-                    
+
                     if hrp then
-                        -- TELEPORT TỨC THÌ (Gán CFrame thẳng, không bay)
-                        hrp.CFrame = spawnPart.CFrame * CFrame.new(0, 3, 0)
-                        task.wait(0.3) -- Nghỉ 0.3 giây tại điểm có trứng
+                        -- TELEPORT TỨC THÌ: Gán CFrame thẳng (không Tween/không bay)
+                        hrp.CFrame = spawnPart.CFrame * CFrame.new(0, 2, 0)
+
+                        -- Tự động kích hoạt nhặt/mua trứng (chạm ProximityPrompt nếu có)
+                        local prompt = spawnPart:FindFirstChildWhichIsA("ProximityPrompt", true) or egg:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        if prompt then
+                            fireproximityprompt(prompt)
+                        end
+
+                        task.wait(0.2) -- Tạm dừng ngắn 0.2 giây tại điểm trứng
                     end
                 end
             end
         end
-        task.wait(0.2) -- Chu kỳ quét lại mỗi 0.2 giây
+        task.wait(0.2)
     end
 end)
