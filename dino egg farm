@@ -12,13 +12,13 @@ _G.AutoHatch = false
 _G.ESPTrung = false
 _G.AutoTeleport = false
 
--- 2. TẠO GIAO DIỆN MENU BẬT/TẮT
+-- 2. TẠO GIAO DIỆN MENU
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local OldGui = PlayerGui:FindFirstChild("DinoFarmMenu")
+local OldGui = PlayerGui:FindFirstChild("DinoFarmMenuV3")
 if OldGui then OldGui:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DinoFarmMenu"
+ScreenGui.Name = "DinoFarmMenuV3"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
@@ -33,7 +33,7 @@ MainFrame.Parent = ScreenGui
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-Title.Text = "DINO EGG FARM V2"
+Title.Text = "DINO EGG FARM V3"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 16
@@ -68,13 +68,13 @@ CreateButton("2. Auto Hatch", 95, "AutoHatch")
 CreateButton("3. ESP Trứng", 145, "ESPTrung")
 CreateButton("4. Auto Teleport", 195, "AutoTeleport")
 
--- 3. HÀM TÌM MODEL TRỨNG VÀ BẮT EVENT
+-- 3. HÀM TÌM TRỨNG THẬT TRONG SPAWN
 local spawnFolder = Workspace:FindFirstChild("EggHuntSpawns")
 
 local function getEggModel(spawnPart)
-    for _, child in pairs(spawnPart:GetChildren()) do
+    for _, child in pairs(spawnPart:GetDescendants()) do
         if child.Name ~= "ESPHighlight" and child.Name ~= "ESPNameTag" and not child:IsA("BillboardGui") and not child:IsA("Highlight") then
-            if child:IsA("Model") or child:IsA("BasePart") then
+            if child:IsA("Model") or child:IsA("BasePart") or child:IsA("MeshPart") then
                 return child
             end
         end
@@ -82,128 +82,81 @@ local function getEggModel(spawnPart)
     return nil
 end
 
--- 4. TÍNH NĂNG 3: CẬP NHẬT ESP HIỂN THỊ
-local function updateESP()
-    if not spawnFolder then return end
-    for _, spawnPart in pairs(spawnFolder:GetChildren()) do
-        local egg = getEggModel(spawnPart)
-        local hl = spawnPart:FindFirstChild("ESPHighlight")
-        local bgui = spawnPart:FindFirstChild("ESPNameTag")
-
-        if _G.ESPTrung and egg then
-            if not hl then
-                hl = Instance.new("Highlight")
-                hl.Name = "ESPHighlight"
-                hl.FillColor = Color3.fromRGB(255, 215, 0)
-                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.Parent = spawnPart
-            end
-
-            if not bgui then
-                bgui = Instance.new("BillboardGui")
-                bgui.Name = "ESPNameTag"
-                bgui.AlwaysOnTop = true
-                bgui.Size = UDim2.new(0, 150, 0, 30)
-                bgui.StudsOffset = Vector3.new(0, 3, 0)
-
-                local textLabel = Instance.new("TextLabel")
-                textLabel.Name = "Label"
-                textLabel.Size = UDim2.new(1, 0, 1, 0)
-                textLabel.BackgroundTransparency = 1
-                textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-                textLabel.TextStrokeTransparency = 0
-                textLabel.TextSize = 13
-                textLabel.Font = Enum.Font.SourceSansBold
-                textLabel.Parent = bgui
-                bgui.Parent = spawnPart
-            end
-
-            local label = bgui:FindFirstChild("Label")
-            if label and HRP then
-                local dist = math.floor((HRP.Position - spawnPart.Position).Magnitude)
-                label.Text = egg.Name .. " [" .. dist .. "m]"
-            end
-        else
-            if hl then hl:Destroy() end
-            if bgui then bgui:Destroy() end
-        end
-    end
-end
-
--- 5. VÒNG LẶP XỬ LÝ CHÍNH
+-- 4. VÒNG LẶP XỬ LÝ
 task.spawn(function()
     while true do
         Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         HRP = Character:FindFirstChild("HumanoidRootPart")
 
         if HRP then
-            -- 1. AUTO COLLECT (Gom xương Bones, Coins trên bản đồ)
+            -- 1. AUTO COLLECT (Hút Tiền/Xương rơi trên map về phía nhân vật)
             if _G.AutoCollect then
                 for _, item in pairs(Workspace:GetChildren()) do
                     if item:IsA("BasePart") or item:IsA("Model") then
-                        if item.Name == "Bones" or item.Name:find("Coin") or item.Name:find("Drop") then
-                            local part = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart")
+                        local itemName = item.Name:lower()
+                        if itemName:find("coin") or itemName:find("bone") or itemName:find("gem") or itemName:find("drop") or itemName:find("collect") then
+                            local part = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart", true)
                             if part then
-                                HRP.CFrame = part.CFrame
-                                task.wait(0.05)
+                                -- Dịch chuyển vật phẩm rơi thẳng vào người chơi để kích hoạt nhặt
+                                part.CFrame = HRP.CFrame
+                                if firetouchinterest then
+                                    firetouchinterest(HRP, part, 0)
+                                    task.wait(0.01)
+                                    firetouchinterest(HRP, part, 1)
+                                end
                             end
                         end
                     end
                 end
             end
 
-            -- 2. AUTO HATCH (Gửi tín hiệu mở trứng trực tiếp tới Server)
-            if _G.AutoHatch then
-                for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                    if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                        if remote.Name:lower():find("hatch") or remote.Name:lower():find("open") or remote.Name:lower():find("buy") then
-                            pcall(function()
-                                if remote:IsA("RemoteEvent") then
-                                    remote:FireServer(1)
-                                else
-                                    remote:InvokeServer(1)
-                                end
-                            end)
-                        end
-                    end
-                end
-            end
-
-            -- 4. AUTO TELEPORT (Dịch chuyển đến điểm Spawn có Trứng & Kích hoạt Remote)
+            -- 4. AUTO TELEPORT & NHẶT TRỨNG
             if _G.AutoTeleport and spawnFolder then
                 for _, spawnPart in pairs(spawnFolder:GetChildren()) do
                     if not _G.AutoTeleport then break end
                     local egg = getEggModel(spawnPart)
 
-                    if spawnPart:IsA("BasePart") and egg then
-                        HRP.CFrame = spawnPart.CFrame * CFrame.new(0, 3, 0)
-                        
-                        -- Thử kích hoạt ProximityPrompt hoặc giả lập Va chạm
-                        local prompt = spawnPart:FindFirstChildWhichIsA("ProximityPrompt", true) or egg:FindFirstChildWhichIsA("ProximityPrompt", true)
-                        if prompt then fireproximityprompt(prompt) end
+                    if egg then
+                        local targetPart = spawnPart:IsA("BasePart") and spawnPart or (egg:IsA("BasePart") and egg or egg:FindFirstChildWhichIsA("BasePart", true))
+                        if targetPart then
+                            -- Dịch chuyển nhân vật đè hẳn lên trứng
+                            HRP.CFrame = targetPart.CFrame
 
-                        if firetouchinterest then
-                            firetouchinterest(HRP, spawnPart, 0)
-                            task.wait(0.05)
-                            firetouchinterest(HRP, spawnPart, 1)
-                        end
-
-                        -- Kích hoạt RemoteEvent thu thập nếu có
-                        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                            if remote:IsA("RemoteEvent") and (remote.Name:lower():find("collect") or remote.Name:lower():find("egg")) then
-                                pcall(function() remote:FireServer(spawnPart, egg) end)
+                            -- Thử kích hoạt tất cả ProximityPrompt trong khu vực trứng
+                            for _, prompt in pairs(spawnPart:GetDescendants()) do
+                                if prompt:IsA("ProximityPrompt") then
+                                    fireproximityprompt(prompt)
+                                end
                             end
-                        end
+                            for _, prompt in pairs(egg:GetDescendants()) do
+                                if prompt:IsA("ProximityPrompt") then
+                                    fireproximityprompt(prompt)
+                                end
+                            end
 
-                        task.wait(0.3)
+                            -- Giả lập chạm trực tiếp vào cả điểm Spawn lẫn Trứng
+                            if firetouchinterest then
+                                firetouchinterest(HRP, targetPart, 0)
+                                task.wait(0.05)
+                                firetouchinterest(HRP, targetPart, 1)
+                            end
+
+                            -- Gửi Remote Event nếu game yêu cầu
+                            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                                if remote:IsA("RemoteEvent") and (remote.Name:lower():find("egg") or remote.Name:lower():find("collect") or remote.Name:lower():find("claim")) then
+                                    pcall(function()
+                                        remote:FireServer(spawnPart)
+                                        remote:FireServer(egg)
+                                    end)
+                                end
+                            end
+
+                            task.wait(0.25)
+                        end
                     end
                 end
             end
         end
-
-        -- Cập nhật ESP
-        updateESP()
 
         task.wait(0.1)
     end
